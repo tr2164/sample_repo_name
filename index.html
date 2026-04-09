@@ -1,0 +1,512 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Sláinte — Job Cost Dashboard</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
+<style>
+  :root {
+    --blue: #2563eb; --blue-light: #dbeafe; --blue-mid: #93bbfd;
+    --orange: #ea580c; --orange-light: #fff7ed; --orange-mid: #fdba74;
+    --slate: #1e293b; --slate2: #334155; --muted: #64748b; --faint: #94a3b8;
+    --bg: #f1f5f9; --card: #ffffff; --border: #e2e8f0; --border2: #cbd5e1;
+    --mono: 'JetBrains Mono', 'SF Mono', 'Consolas', monospace;
+    --sans: 'DM Sans', system-ui, sans-serif;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: var(--sans); background: var(--bg); color: var(--slate2); line-height: 1.5; }
+
+  .wrap { max-width: 1140px; margin: 0 auto; padding: 28px 24px 40px; }
+
+  /* Header */
+  .header { display: flex; justify-content: space-between; align-items: flex-end; flex-wrap: wrap; gap: 12px; margin-bottom: 24px; }
+  .header h1 { font-size: 26px; font-weight: 700; color: var(--slate); letter-spacing: -0.5px; }
+  .header .sub { font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 1.5px; color: var(--muted); margin-bottom: 2px; }
+  .filters { display: flex; gap: 6px; }
+  .filters button {
+    padding: 6px 18px; border-radius: 6px; font-size: 13px; font-weight: 600;
+    font-family: var(--sans); cursor: pointer; transition: all .15s;
+    border: 1px solid var(--border2); background: var(--card); color: var(--muted);
+  }
+  .filters button:hover { background: #f8fafc; border-color: var(--faint); }
+  .filters button.active { background: var(--slate); color: #fff; border-color: var(--slate); }
+
+  /* KPI Cards */
+  .kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(175px, 1fr)); gap: 12px; margin-bottom: 24px; }
+  .kpi {
+    background: var(--card); border: 1px solid var(--border); border-radius: 10px;
+    padding: 16px 20px; position: relative; overflow: hidden;
+    animation: fadeUp .4s ease both;
+  }
+  .kpi::before {
+    content: ''; position: absolute; top: 0; left: 0; right: 0; height: 3px;
+    background: var(--blue);
+  }
+  .kpi.warn::before { background: var(--orange); }
+  .kpi-label { font-size: 10.5px; font-weight: 600; text-transform: uppercase; letter-spacing: 1px; color: var(--muted); margin-bottom: 4px; }
+  .kpi-value { font-size: 26px; font-weight: 700; color: var(--slate); font-family: var(--mono); }
+  .kpi-sub { font-size: 11.5px; color: var(--faint); margin-top: 2px; }
+
+  @keyframes fadeUp {
+    from { opacity: 0; transform: translateY(12px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+  .kpi:nth-child(2) { animation-delay: .05s; }
+  .kpi:nth-child(3) { animation-delay: .1s; }
+  .kpi:nth-child(4) { animation-delay: .15s; }
+  .kpi:nth-child(5) { animation-delay: .2s; }
+
+  /* Charts */
+  .charts { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 24px; }
+  @media (max-width: 800px) { .charts { grid-template-columns: 1fr; } }
+  .chart-card {
+    background: var(--card); border: 1px solid var(--border); border-radius: 10px;
+    padding: 20px 20px 12px; animation: fadeUp .5s ease both; animation-delay: .15s;
+  }
+  .chart-title { font-size: 14px; font-weight: 600; color: var(--slate); margin-bottom: 2px; }
+  .chart-sub { font-size: 11px; color: var(--faint); margin-bottom: 14px; }
+  .chart-wrap { position: relative; height: 240px; }
+
+  /* Comparison */
+  .comparison {
+    background: var(--card); border: 1px solid var(--border); border-radius: 10px;
+    padding: 20px; margin-bottom: 24px; animation: fadeUp .5s ease both; animation-delay: .2s;
+  }
+  .comparison h2 { font-size: 14px; font-weight: 600; color: var(--slate); margin-bottom: 16px; }
+  .comp-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+  @media (max-width: 640px) { .comp-grid { grid-template-columns: 1fr; } }
+  .comp-panel {
+    border: 1px solid var(--border); border-radius: 8px; padding: 16px;
+    border-left: 4px solid var(--blue); transition: box-shadow .2s;
+  }
+  .comp-panel:hover { box-shadow: 0 2px 12px rgba(0,0,0,.06); }
+  .comp-panel.premium { border-left-color: #f59e0b; }
+  .comp-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px; }
+  .badge {
+    display: inline-block; font-size: 10px; font-weight: 700; padding: 3px 10px;
+    border-radius: 4px; letter-spacing: .5px; text-transform: uppercase;
+  }
+  .badge-std { background: #e0e7ff; color: #3730a3; }
+  .badge-prm { background: #fef3c7; color: #92400e; }
+  .comp-stats { display: grid; grid-template-columns: 1fr 1fr; gap: 10px 20px; }
+  .comp-stat-label { font-size: 10.5px; color: var(--muted); margin-bottom: 1px; }
+  .comp-stat-value { font-size: 14px; font-weight: 600; }
+
+  /* Table */
+  .table-card {
+    background: var(--card); border: 1px solid var(--border); border-radius: 10px;
+    overflow: hidden; margin-bottom: 24px; animation: fadeUp .5s ease both; animation-delay: .25s;
+  }
+  .table-header { padding: 16px 20px 12px; border-bottom: 1px solid var(--border); }
+  .table-header h2 { font-size: 14px; font-weight: 600; color: var(--slate); }
+  .table-header p { font-size: 11px; color: var(--faint); margin-top: 2px; }
+  .table-scroll { overflow-x: auto; }
+  table { width: 100%; border-collapse: collapse; font-size: 12.5px; }
+  thead tr { background: #f8fafc; }
+  th {
+    padding: 9px 14px; text-align: right; font-weight: 600; color: var(--muted);
+    font-size: 10.5px; text-transform: uppercase; letter-spacing: .5px;
+    white-space: nowrap; cursor: pointer; user-select: none; position: relative;
+    transition: color .15s;
+  }
+  th:hover { color: var(--slate2); }
+  th.left { text-align: left; }
+  th .arrow { font-size: 9px; margin-left: 3px; opacity: .5; }
+  td { padding: 9px 14px; border-bottom: 1px solid #f1f5f9; white-space: nowrap; }
+  td.mono { font-family: var(--mono); font-size: 12px; text-align: right; }
+  td.left { text-align: left; }
+  td.right { text-align: right; }
+  tr.row { cursor: pointer; transition: background .1s; }
+  tr.row:hover { background: #f8fafc; }
+  tr.row.selected { background: #eff6ff; }
+  .pill {
+    display: inline-block; font-size: 11px; font-weight: 600; padding: 2px 9px;
+    border-radius: 99px;
+  }
+  .pill-blue { background: var(--blue-light); color: var(--blue); }
+  .pill-orange { background: var(--orange-light); color: var(--orange); }
+  .pill-gray { background: #f1f5f9; color: var(--muted); }
+  .fav { color: var(--blue); }
+  .unfav { color: var(--orange); }
+
+  /* Detail panel */
+  .detail {
+    background: var(--card); border: 1px solid var(--border); border-radius: 10px;
+    padding: 22px; margin-bottom: 24px; border-left: 4px solid var(--blue);
+    animation: fadeUp .3s ease both;
+  }
+  .detail.loss { border-left-color: var(--orange); }
+  .detail-top { display: flex; justify-content: space-between; align-items: flex-start; flex-wrap: wrap; gap: 8px; margin-bottom: 18px; }
+  .detail-job { font-size: 18px; font-weight: 700; color: var(--slate); font-family: var(--mono); }
+  .detail-cust { font-size: 12px; color: var(--muted); margin-top: 2px; }
+  .detail-close {
+    background: none; border: 1px solid var(--border); border-radius: 6px;
+    padding: 5px 14px; cursor: pointer; font-size: 12px; color: var(--muted);
+    font-family: var(--sans); transition: all .15s;
+  }
+  .detail-close:hover { border-color: var(--border2); color: var(--slate2); }
+  .detail-cols { display: grid; grid-template-columns: 1.2fr 1fr; gap: 24px; }
+  @media (max-width: 700px) { .detail-cols { grid-template-columns: 1fr; } }
+  .detail-section-label { font-size: 10.5px; font-weight: 600; text-transform: uppercase; letter-spacing: .5px; color: var(--muted); margin-bottom: 10px; }
+  .detail table th { font-size: 10px; padding: 5px 8px; cursor: default; }
+  .detail table td { padding: 7px 8px; font-size: 12.5px; }
+  .detail table tr:last-child td { font-weight: 700; border-top: 2px solid var(--border); }
+  .detail-stats { display: grid; grid-template-columns: 1fr 1fr; gap: 12px 20px; }
+  .detail-stat-label { font-size: 10.5px; color: var(--muted); }
+  .detail-stat-value { font-size: 14px; font-weight: 600; font-family: var(--mono); }
+
+  .footer { text-align: center; font-size: 11px; color: var(--faint); padding: 12px 0; }
+</style>
+</head>
+<body>
+
+<div class="wrap">
+  <div class="header">
+    <div>
+      <div class="sub">Sláinte Manufacturing</div>
+      <h1>Job cost dashboard</h1>
+    </div>
+    <div class="filters">
+      <button class="active" onclick="setFilter('All')">All</button>
+      <button onclick="setFilter('Standard')">Standard</button>
+      <button onclick="setFilter('Premium')">Premium</button>
+    </div>
+  </div>
+
+  <div class="kpis" id="kpis"></div>
+
+  <div class="charts">
+    <div class="chart-card">
+      <div class="chart-title">Gross profit by job</div>
+      <div class="chart-sub"><span style="display:inline-block;width:10px;height:10px;border-radius:2px;background:var(--blue);vertical-align:middle;margin-right:4px"></span>Profitable &nbsp; <span style="display:inline-block;width:10px;height:10px;border-radius:2px;background:var(--orange);vertical-align:middle;margin-right:4px"></span>Loss</div>
+      <div class="chart-wrap"><canvas id="profitChart"></canvas></div>
+    </div>
+    <div class="chart-card">
+      <div class="chart-title">Budget variance by cost type</div>
+      <div class="chart-sub">Positive = over budget (unfavorable)</div>
+      <div class="chart-wrap"><canvas id="varianceChart"></canvas></div>
+    </div>
+  </div>
+
+  <div class="comparison">
+    <h2>Standard vs Premium comparison</h2>
+    <div class="comp-grid" id="compGrid"></div>
+  </div>
+
+  <div class="table-card">
+    <div class="table-header">
+      <h2>Job detail</h2>
+      <p>Click headers to sort &middot; Click a row to drill in</p>
+    </div>
+    <div class="table-scroll">
+      <table>
+        <thead><tr id="thead"></tr></thead>
+        <tbody id="tbody"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <div id="detailPanel"></div>
+
+  <div class="footer">Sláinte Job Cost Dashboard — ACCT-GB.2350 Lab 7-1 — Built with Claude</div>
+</div>
+
+<script>
+let DATA = [];
+
+/* ── state ── */
+let currentFilter = 'All';
+let sortCol = 'Job_No';
+let sortDir = 1;
+let selectedJob = null;
+let profitChart, varianceChart;
+
+/* ── helpers ── */
+const fmt = n => n == null ? '—' : '$' + Math.round(n).toLocaleString();
+const fmtPct = n => n == null ? '—' : (n * 100).toFixed(1) + '%';
+const clr = (n, flip) => { const pos = flip ? n <= 0 : n >= 0; return pos ? 'var(--blue)' : 'var(--orange)'; };
+
+function getFiltered() {
+  let d = currentFilter === 'All' ? [...DATA] : DATA.filter(j => j.Job_Type === currentFilter);
+  d.sort((a, b) => (a[sortCol] > b[sortCol] ? 1 : a[sortCol] < b[sortCol] ? -1 : 0) * sortDir);
+  return d;
+}
+
+function calcTypeStats(type) {
+  const jobs = DATA.filter(j => j.Job_Type === type);
+  const n = jobs.length; if (!n) return null;
+  return {
+    count: n,
+    avgRevenue: jobs.reduce((s,j) => s + j.Job_Revenue, 0) / n,
+    avgMargin: jobs.reduce((s,j) => s + j.Gross_Margin_Pct, 0) / n,
+    avgGP: jobs.reduce((s,j) => s + j.Gross_Profit, 0) / n,
+    avgDMVar: jobs.reduce((s,j) => s + j.DM_Variance, 0) / n,
+    avgHrsVar: jobs.reduce((s,j) => s + j.Hours_Variance, 0) / n,
+    losers: jobs.filter(j => j.Gross_Profit < 0).length,
+  };
+}
+
+/* ── filter ── */
+function setFilter(f) {
+  currentFilter = f;
+  document.querySelectorAll('.filters button').forEach(b => {
+    b.classList.toggle('active', b.textContent === f);
+  });
+  selectedJob = null;
+  render();
+}
+
+/* ── sort ── */
+function handleSort(col) {
+  if (sortCol === col) sortDir *= -1;
+  else { sortCol = col; sortDir = 1; }
+  render();
+}
+
+/* ── KPIs ── */
+function renderKPIs(data) {
+  const totalRev = data.reduce((s,j) => s + j.Job_Revenue, 0);
+  const totalGP = data.reduce((s,j) => s + j.Gross_Profit, 0);
+  const avgMargin = totalGP / totalRev;
+  const profitable = data.filter(j => j.Gross_Profit > 0).length;
+  const losing = data.filter(j => j.Gross_Profit < 0).length;
+  const overBudget = data.filter(j => j.Total_Actual_Cost > j.Total_Budgeted_Cost).length;
+
+  document.getElementById('kpis').innerHTML = `
+    <div class="kpi"><div class="kpi-label">Total revenue</div><div class="kpi-value">${fmt(totalRev)}</div><div class="kpi-sub">${data.length} jobs</div></div>
+    <div class="kpi${totalGP < 0 ? ' warn':''}"><div class="kpi-label">Total profit</div><div class="kpi-value">${fmt(totalGP)}</div><div class="kpi-sub">Avg margin ${fmtPct(avgMargin)}</div></div>
+    <div class="kpi"><div class="kpi-label">Profitable</div><div class="kpi-value">${profitable}</div><div class="kpi-sub">of ${data.length} jobs</div></div>
+    <div class="kpi${losing > 0 ? ' warn':''}"><div class="kpi-label">Losing money</div><div class="kpi-value">${losing}</div><div class="kpi-sub">${losing > 0 ? 'Needs attention' : 'All clear'}</div></div>
+    <div class="kpi${overBudget > 0 ? ' warn':''}"><div class="kpi-label">Over budget</div><div class="kpi-value">${overBudget}</div><div class="kpi-sub">of ${data.length} jobs</div></div>
+  `;
+}
+
+/* ── Charts ── */
+function renderCharts(data) {
+  const labels = data.map(j => '#' + j.Job_No);
+
+  if (profitChart) profitChart.destroy();
+  profitChart = new Chart(document.getElementById('profitChart'), {
+    type: 'bar',
+    data: {
+      labels,
+      datasets: [{
+        data: data.map(j => j.Gross_Profit),
+        backgroundColor: data.map(j => j.Gross_Profit >= 0 ? '#2563eb' : '#ea580c'),
+        borderRadius: 3,
+        borderSkipped: false,
+      }]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          backgroundColor: '#1e293b', titleFont: { family: "'DM Sans'" }, bodyFont: { family: "'JetBrains Mono'", size: 12 },
+          callbacks: {
+            title: (items) => { const j = data[items[0].dataIndex]; return `Job #${j.Job_No} — ${j.Customer_Account_Name}`; },
+            label: (item) => { const j = data[item.dataIndex]; return [`Revenue: ${fmt(j.Job_Revenue)}`, `Cost: ${fmt(j.Total_Actual_Cost)}`, `Profit: ${fmt(j.Gross_Profit)} (${fmtPct(j.Gross_Margin_Pct)})`]; }
+          }
+        }
+      },
+      scales: {
+        x: { grid: { display: false }, ticks: { font: { size: 10, family: "'DM Sans'" }, color: '#94a3b8' } },
+        y: { grid: { color: '#f1f5f9' }, ticks: { font: { size: 10, family: "'JetBrains Mono'" }, color: '#94a3b8', callback: v => '$' + (v/1000).toFixed(1) + 'k' } }
+      }
+    }
+  });
+
+  if (varianceChart) varianceChart.destroy();
+  varianceChart = new Chart(document.getElementById('varianceChart'), {
+    type: 'bar',
+    data: {
+      labels,
+      datasets: [
+        { label: 'Materials', data: data.map(j => j.DM_Variance), backgroundColor: '#fdba74', borderRadius: 0 },
+        { label: 'Labor', data: data.map(j => j.Actual_DL_Cost - j.Budgeted_DL_Cost), backgroundColor: '#93bbfd', borderRadius: 0 },
+        { label: 'Overhead', data: data.map(j => j.Actual_OH_Cost - j.Budgeted_OH_Cost), backgroundColor: '#a5b4fc', borderRadius: { topLeft: 3, topRight: 3 } },
+      ]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: {
+        legend: { position: 'top', align: 'end', labels: { boxWidth: 10, font: { size: 11, family: "'DM Sans'" }, color: '#64748b', padding: 12 } },
+        tooltip: {
+          backgroundColor: '#1e293b', titleFont: { family: "'DM Sans'" }, bodyFont: { family: "'JetBrains Mono'", size: 12 },
+          callbacks: {
+            title: (items) => `Job #${data[items[0].dataIndex].Job_No}`,
+          }
+        }
+      },
+      scales: {
+        x: { stacked: true, grid: { display: false }, ticks: { font: { size: 10, family: "'DM Sans'" }, color: '#94a3b8' } },
+        y: { stacked: true, grid: { color: '#f1f5f9' }, ticks: { font: { size: 10, family: "'JetBrains Mono'" }, color: '#94a3b8', callback: v => '$' + Math.round(v) } }
+      }
+    }
+  });
+}
+
+/* ── Comparison ── */
+function renderComparison() {
+  const types = ['Standard', 'Premium'];
+  document.getElementById('compGrid').innerHTML = types.map(type => {
+    const d = calcTypeStats(type);
+    if (!d) return '';
+    const cls = type === 'Premium' ? 'comp-panel premium' : 'comp-panel';
+    const badge = type === 'Premium' ? 'badge badge-prm' : 'badge badge-std';
+    return `
+      <div class="${cls}">
+        <div class="comp-header">
+          <span class="${badge}">${type}</span>
+          <span style="font-size:12px;color:var(--muted)">${d.count} jobs</span>
+        </div>
+        <div class="comp-stats">
+          <div><div class="comp-stat-label">Avg revenue</div><div class="comp-stat-value">${fmt(d.avgRevenue)}</div></div>
+          <div><div class="comp-stat-label">Avg margin</div><div class="comp-stat-value" style="color:${d.avgMargin >= .2 ? 'var(--blue)' : 'var(--orange)'}">${fmtPct(d.avgMargin)}</div></div>
+          <div><div class="comp-stat-label">Avg profit</div><div class="comp-stat-value" style="color:${d.avgGP >= 0 ? 'var(--blue)' : 'var(--orange)'}">${fmt(d.avgGP)}</div></div>
+          <div><div class="comp-stat-label">Jobs losing $</div><div class="comp-stat-value" style="color:${d.losers > 0 ? 'var(--orange)' : 'var(--blue)'}">${d.losers}</div></div>
+          <div><div class="comp-stat-label">Avg DM variance</div><div class="comp-stat-value" style="color:${clr(d.avgDMVar, true)}">${fmt(d.avgDMVar)}</div></div>
+          <div><div class="comp-stat-label">Avg hrs variance</div><div class="comp-stat-value" style="color:${clr(d.avgHrsVar, true)}">${d.avgHrsVar > 0 ? '+' : ''}${d.avgHrsVar.toFixed(1)}h</div></div>
+        </div>
+      </div>`;
+  }).join('');
+}
+
+/* ── Table ── */
+const COLS = [
+  { key: 'Job_No', label: 'Job', cls: 'right' },
+  { key: 'Job_Type', label: 'Type', cls: 'left' },
+  { key: 'Customer_Account_Name', label: 'Customer', cls: 'left' },
+  { key: 'Job_Revenue', label: 'Revenue', cls: 'right' },
+  { key: 'Total_Budgeted_Cost', label: 'Budgeted', cls: 'right' },
+  { key: 'Total_Actual_Cost', label: 'Actual', cls: 'right' },
+  { key: 'Gross_Profit', label: 'Profit', cls: 'right' },
+  { key: 'Gross_Margin_Pct', label: 'Margin', cls: 'right' },
+  { key: 'DM_Variance', label: 'DM var', cls: 'right' },
+  { key: 'Hours_Variance', label: 'Hrs var', cls: 'right' },
+];
+
+function renderTable(data) {
+  document.getElementById('thead').innerHTML = COLS.map(c =>
+    `<th class="${c.cls}" onclick="handleSort('${c.key}')">${c.label}${sortCol === c.key ? `<span class="arrow">${sortDir === 1 ? '&#9650;' : '&#9660;'}</span>` : ''}</th>`
+  ).join('');
+
+  document.getElementById('tbody').innerHTML = data.map((j, i) => {
+    const sel = selectedJob === j.Job_No ? ' selected' : '';
+    const badgeCls = j.Job_Type === 'Premium' ? 'badge badge-prm' : 'badge badge-std';
+    const marginCls = j.Gross_Margin_Pct >= .2 ? 'pill pill-blue' : j.Gross_Margin_Pct >= 0 ? 'pill pill-gray' : 'pill pill-orange';
+    const actColor = j.Total_Actual_Cost > j.Total_Budgeted_Cost ? 'var(--orange)' : 'var(--slate2)';
+    const dmColor = j.DM_Variance > 0 ? 'var(--orange)' : j.DM_Variance < 0 ? 'var(--blue)' : 'var(--muted)';
+    const hrColor = j.Hours_Variance > 0 ? 'var(--orange)' : j.Hours_Variance < 0 ? 'var(--blue)' : 'var(--muted)';
+
+    return `<tr class="row${sel}" onclick="selectJob(${j.Job_No})">
+      <td class="mono" style="font-weight:600">${j.Job_No}</td>
+      <td class="left"><span class="${badgeCls}">${j.Job_Type}</span></td>
+      <td class="left" style="max-width:170px;overflow:hidden;text-overflow:ellipsis">${j.Customer_Account_Name}</td>
+      <td class="mono">${fmt(j.Job_Revenue)}</td>
+      <td class="mono" style="color:var(--muted)">${fmt(j.Total_Budgeted_Cost)}</td>
+      <td class="mono" style="color:${actColor}">${fmt(j.Total_Actual_Cost)}</td>
+      <td class="mono" style="font-weight:600;color:${j.Gross_Profit >= 0 ? 'var(--blue)' : 'var(--orange)'}">${fmt(j.Gross_Profit)}</td>
+      <td class="right"><span class="${marginCls}">${fmtPct(j.Gross_Margin_Pct)}</span></td>
+      <td class="mono" style="color:${dmColor}">${j.DM_Variance > 0 ? '+' : ''}${fmt(j.DM_Variance)}</td>
+      <td class="mono" style="color:${hrColor}">${j.Hours_Variance > 0 ? '+' : ''}${j.Hours_Variance.toFixed(1)}</td>
+    </tr>`;
+  }).join('');
+}
+
+/* ── Detail panel ── */
+function selectJob(no) {
+  selectedJob = selectedJob === no ? null : no;
+  render();
+  if (selectedJob) document.getElementById('detailPanel').scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+}
+
+function renderDetail() {
+  const panel = document.getElementById('detailPanel');
+  if (!selectedJob) { panel.innerHTML = ''; return; }
+  const j = DATA.find(d => d.Job_No === selectedJob);
+  if (!j) { panel.innerHTML = ''; return; }
+
+  const rows = [
+    { label: 'Direct materials', b: j.Budgeted_DM_Cost, a: j.Actual_DM_Cost },
+    { label: 'Direct labor', b: j.Budgeted_DL_Cost, a: j.Actual_DL_Cost },
+    { label: 'Overhead', b: j.Budgeted_OH_Cost, a: j.Actual_OH_Cost },
+  ];
+  const totalVar = j.Total_Actual_Cost - j.Total_Budgeted_Cost;
+
+  panel.innerHTML = `
+    <div class="detail${j.Gross_Profit < 0 ? ' loss' : ''}">
+      <div class="detail-top">
+        <div>
+          <div class="detail-job">Job #${j.Job_No} <span class="${j.Job_Type === 'Premium' ? 'badge badge-prm' : 'badge badge-std'}" style="font-size:10px;vertical-align:middle;margin-left:8px">${j.Job_Type}</span></div>
+          <div class="detail-cust">${j.Customer_Account_Name} — ${j.Customer_City}, ${j.Customer_State}</div>
+        </div>
+        <button class="detail-close" onclick="selectJob(${j.Job_No})">Close</button>
+      </div>
+      <div class="detail-cols">
+        <div>
+          <div class="detail-section-label">Cost breakdown</div>
+          <table>
+            <thead><tr><th class="left">Category</th><th>Budgeted</th><th>Actual</th><th>Variance</th></tr></thead>
+            <tbody>
+              ${rows.map(r => {
+                const v = r.a - r.b;
+                return `<tr>
+                  <td class="left" style="font-weight:500">${r.label}</td>
+                  <td class="mono" style="color:var(--muted)">${fmt(r.b)}</td>
+                  <td class="mono">${fmt(r.a)}</td>
+                  <td class="mono" style="font-weight:600;color:${v > 0 ? 'var(--orange)' : v < 0 ? 'var(--blue)' : 'var(--muted)'}">${v > 0 ? '+' : ''}${fmt(v)}</td>
+                </tr>`;
+              }).join('')}
+              <tr>
+                <td class="left">Total</td>
+                <td class="mono">${fmt(j.Total_Budgeted_Cost)}</td>
+                <td class="mono">${fmt(j.Total_Actual_Cost)}</td>
+                <td class="mono" style="color:${totalVar > 0 ? 'var(--orange)' : 'var(--blue)'}">${totalVar > 0 ? '+' : ''}${fmt(totalVar)}</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+        <div>
+          <div class="detail-section-label">Summary</div>
+          <div class="detail-stats">
+            <div><div class="detail-stat-label">Revenue</div><div class="detail-stat-value">${fmt(j.Job_Revenue)}</div></div>
+            <div><div class="detail-stat-label">Gross profit</div><div class="detail-stat-value" style="color:${j.Gross_Profit >= 0 ? 'var(--blue)' : 'var(--orange)'}">${fmt(j.Gross_Profit)}</div></div>
+            <div><div class="detail-stat-label">Margin</div><div class="detail-stat-value" style="color:${j.Gross_Margin_Pct >= .2 ? 'var(--blue)' : 'var(--orange)'}">${fmtPct(j.Gross_Margin_Pct)}</div></div>
+            <div><div class="detail-stat-label">Lead time</div><div class="detail-stat-value">${j.Lead_Days} days</div></div>
+            <div><div class="detail-stat-label">Budgeted hrs</div><div class="detail-stat-value">${j.Budgeted_Hours}h</div></div>
+            <div><div class="detail-stat-label">Actual hrs</div><div class="detail-stat-value" style="color:${j.Hours_Variance > 0 ? 'var(--orange)' : 'var(--blue)'}">${j.Actual_Hours}h</div></div>
+            <div><div class="detail-stat-label">Labor rate</div><div class="detail-stat-value">$${j.Direct_Labor_Rate}/hr</div></div>
+            <div><div class="detail-stat-label">OH rate</div><div class="detail-stat-value">$${j.Overhead_Rate}/hr</div></div>
+          </div>
+        </div>
+      </div>
+    </div>`;
+}
+
+/* ── master render ── */
+function render() {
+  const data = getFiltered();
+  renderKPIs(data);
+  renderCharts(data);
+  renderComparison();
+  renderTable(data);
+  renderDetail();
+}
+
+fetch('data1.json')
+  .then(r => r.json())
+  .then(d => { DATA = d; render(); })
+  .catch(() => {
+    document.querySelector('.wrap').innerHTML =
+      '<div style="padding:60px 20px;text-align:center">'
+      + '<h2 style="color:#1e293b;margin-bottom:8px">Could not load data.json</h2>'
+      + '<p style="color:#64748b;font-size:14px">Make sure <code>data.json</code> is in the same folder as this HTML file.<br>'
+      + 'If opening locally, run: <code>python3 -m http.server</code></p></div>';
+  })
+</script>
+</body>
+</html>
